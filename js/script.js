@@ -24,11 +24,11 @@ function createElectron(charge, vector, color){
 	if(!vector)
 		vector = new THREE.Vector3();
 
-	var geometry = new THREE.SphereGeometry(5, 6, 6);
+	var geometry = new THREE.SphereGeometry(0.5, 6, 6);
 	var material = new THREE.MeshBasicMaterial( {color: color} );
 	var electron = new THREE.Mesh( geometry, material );
 
-	electron.position = vector;
+	electron.position.sub(electron.position).add(vector)//because three.js won't let us do electron.position = vector...
 	electron.charge = charge;
 
 	return electron;
@@ -40,6 +40,8 @@ function netChargeVector(testCharge){
 	var charges = electrons.children;
 
 	var netCharge = new THREE.Vector3();
+	// console.log(testCharge.position)
+	// console.log(netCharge)
 
 	for(var i = 0; i < charges.length; i++)
 		netCharge.add(chargeVector(testCharge, charges[i]));
@@ -52,10 +54,12 @@ function netChargeVector(testCharge){
 
 function chargeVector(testCharge, charge){
 	//formula = q1q2 / r^2 * r vector - we don't care about the k constant because it's a constant and irrelevant here
-	var displacement = testCharge.clone().sub(charge);
+	var displacement = testCharge.position.clone().sub(charge.position);
+
 	var magnitude = testCharge.charge * charge.charge;
 	magnitude /= testCharge.position.distanceToSquared(charge.position);
 	var vector = displacement.normalize().multiplyScalar(magnitude);
+	// console.log(vector)
 	return vector;
 
 }
@@ -127,11 +131,11 @@ function init(){
 	scene.add( light );
 	
 	
-    testCharge = createElectron(5, new THREE.Vector3(), testColor);
+    testCharge = createElectron(1, new THREE.Vector3(), testColor);
     testChargeArrow = arrowHelper(testCharge.position, new THREE.Vector3());
 
-    var negCharge = createElectron(5, new THREE.Vector3(1, 5, 3), negativeColor);
-    var posCharge = createElectron(5, new THREE.Vector3(-2, 4, -4), positiveColor);
+    var negCharge = createElectron(-1, new THREE.Vector3(5, 3, 0), negativeColor);
+    var posCharge = createElectron(1, new THREE.Vector3(4, -4, 0), positiveColor);
 
     
 
@@ -176,9 +180,10 @@ function render(){
 	
 	t+=0.01;
 	
-	var electricForce = netChargeVector(testCharge);//the direction in which the testCharge will move
+	electricForce = netChargeVector(testCharge);//the direction in which the testCharge will move
+	testCharge.position.add(electricForce)
 
-	testChargeArrow.position = testCharge.position.add(electricForce);//might need to divide by a scalar so it doesn't move too quickly
+	// testChargeArrow.position.sub(testChargeArrow.position).testCharge.position.add(electricForce);//might need to divide by a scalar so it doesn't move too quickly
 	var arrowDirection = electricForce.clone();
 	var newMagnitude = Math.max(Math.min(Math.log(arrowDirection.length()), 4), 1);//set the magnitude to the log of its original - ensure it's within the range [1,4]
 
