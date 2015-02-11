@@ -1,7 +1,7 @@
 <html>
 	<!--Template made by mjkaufer- http://github.com/mjkaufer-->
 	<head>
-		<title>Vector Field Simulator</title>
+		<title>Electron Field Simulator</title>
 		<style>
 			body{
 				background-color: #000000;
@@ -28,7 +28,6 @@
     <script src="./js/BoxGeometry.js"></script>
     <script src="./js/ArrowHelper.js"></script>
     <script src="./js/dat.gui.js"></script>
-    <!--<script src="js/setup.js"></script>-->
 
 		<div style="position:absolute;margin-left:25px;" id="h">
 			<h2>By <a href="http://github.com/mjkaufer">mjkaufer</a></h2>
@@ -47,11 +46,58 @@
 			var t = 0;//increases each call of render
 			vectorFormula = [];
 			var pause = false;
-
+			var electrons = new THREE.Object3D();
+			var testColor = 0x00ff00;
+			var negativeColor = 0xff0000;
+			var positiveColor = 0x0000ff;
+			var testCharge;
+			var testChargeArrow;
 			//declare other vars here
 
 			init();
 			animate();
+
+			function createElectron(charge, vector, color){
+				if(!charge)
+					charge = 0;
+				if(!vector)
+					vector = new THREE.Vector3();
+
+				var geometry = new THREE.SphereGeometry(5, 6, 6);
+				var material = new THREE.MeshBasicMaterial( {color: color} );
+				var electron = new THREE.Mesh( geometry, material );
+
+				electron.position = vector;
+				electron.charge = charge;
+
+				return electron;
+			}
+
+			function netChargeVector(testCharge){
+
+				//the charges which testCharge is interacting with are in electrons
+				var charges = electrons.children;
+
+				var netCharge = new THREE.Vector3();
+
+				for(var i = 0; i < charges.length; i++)
+					netCharge.add(chargeVector(testCharge, charges[i]));
+				
+				// testCharge.direction = netCharge;
+
+				return netCharge;
+
+			}
+
+			function chargeVector(testCharge, charge){
+				//formula = q1q2 / r^2 * r vector - we don't care about the k constant because it's a constant and irrelevant here
+				var displacement = testCharge.clone().sub(charge);
+				var magnitude = testCharge.charge * charge.charge;
+				magnitude /= testCharge.position.distanceToSquared(charge.position);
+				var vector = displacement.normalize().multiplyScalar(magnitude);
+				return vector;
+
+			}
 
 			function $(el){
 				return document.getElementById(el);
@@ -63,27 +109,14 @@
 
 			function init(){
 				
-				
-				
 				var gui = new dat.GUI({
 					height : 5 * 32 - 1
 				});
 				
 				var Params = function() {
-					this.x = 'y/(x*x+y*y)+x*Math.sin(t*x)';
-					this.y = '-x/(x*x+y*y)+y*Math.cos(t*y)';
-					this.z = '0';
-					this.width = 3;
-					this.height = 3;
-					this.depth = 3;
 					this.fsize = 9;
 					this.ffreq = 3;
-					this.offsetX = 2;
-					this.offsetY = -1;
-					this.offsetZ = 0;
-					this.wcs = 10;
-					this.hcs = 10;
-					this.dcs = 10;
+					
 					this.speed = 4;
 					this.pause = function(){
 						pause = !pause;
@@ -96,42 +129,6 @@
 				params = new Params();
 				// gui.remember(params);
 				
-				gui.add(params,"x").name("X Equation").onFinishChange(function(){
-					createStuff();
-				});
-				gui.add(params,"y").name("Y Equation").onFinishChange(function(){
-					createStuff();
-				});
-				gui.add(params,"z").name("Z Equation").onFinishChange(function(){
-					createStuff();
-				});
-				gui.add(params,"width").name("Width").onFinishChange(function(){
-					createStuff();
-				});
-				gui.add(params,"height").name("Height").onFinishChange(function(){
-					createStuff();
-				});
-				gui.add(params,"depth").name("Depth").onFinishChange(function(){
-					createStuff();
-				});
-				gui.add(params,"wcs").name("Width Cross Sections").onFinishChange(function(){
-					createStuff();
-				});
-				gui.add(params,"hcs").name("Height Cross Sections").onFinishChange(function(){
-					createStuff();
-				});
-				gui.add(params,"dcs").name("Depth Cross Sections").onFinishChange(function(){
-					createStuff();
-				});
-				gui.add(params,"offsetX").name("Shape's X Offset").onFinishChange(function(){
-					createStuff();
-				});
-				gui.add(params,"offsetY").name("Shape's Y Offset").onFinishChange(function(){
-					createStuff();
-				});
-				gui.add(params,"offsetZ").name("Shape's Z Offset").onFinishChange(function(){
-					createStuff();
-				});
 				gui.add(params,"fsize").name("Arrow Field Size").onFinishChange(function(){
 					createStuff();
 				});
@@ -168,104 +165,36 @@
 				var light = new THREE.AmbientLight( 0x404040 ); // soft white light
 				scene.add( light );
 				
+				
+	            testCharge = createElectron(5, new THREE.Vector3(), testColor);
+	            testChargeArrow = arrowHelper(testCharge.position, new THREE.Vector3());
 
-	            // scene.add(sprite);
-	            spriteGroup = new THREE.Object3D();
-	            scene.add(spriteGroup);
+	            var negCharge = createElectron(5, new THREE.Vector3(1, 5, 3), negativeColor);
+	            var posCharge = createElectron(5, new THREE.Vector3(-2, 4, -4), positiveColor);
+
+	            
+
+	            scene.add(testCharge);
+	            scene.add(testChargeArrow);
+
+	            electrons.add(negCharge);
+	            electrons.add(posCharge);
+	            scene.add(electrons);
+
 	            renderer.setClearColor(0xededed);
 	            
-
-	            
-	            createStuff();
-	            setInterval(function(){
-	            	cube.material.color.offsetHSL(0.001,0,0);
-	            },10);
-
-            
 			}
 			
-			function ah(pos, dir){
+			function arrowHelper(pos, dir){
+				if(!dir)
+					dir = new THREE.Vector3();
+
 				dir = dir.normalize();//make sure it's a unit vector
 				return new THREE.ArrowHelper(dir, pos, 0.5, 0x000000, 0.25, 0.25);
 			}
 
-			function createStuff(){
-				t = 0;
-				vectorFormula[0] = params.x;
-				vectorFormula[1] = params.y;
-				vectorFormula[2] = params.z;
-				
-				scene.children = [];
-				scene.add(spriteGroup)
-				addArrows();
-
-	            var w = params.width;
-	            var h = params.height;
-	            var d = params.depth;
-	            // var sections = 10;
-	            geometry = new THREE.BoxGeometry( w, h, d, params.wcs, params.hcs, params.dcs);//10 width and height segments, which means more shit in our geometry which means a better flow
-
-	            // tempgeo = new THREE.BoxGeometry( w, h, 0, sections, sections, 0);//100 width and height segments, which means more shit in our geometry which means a better flow
-	            // geometry = boxGeo(3,1,10,10).clone();
-	            // geometry = new THREE.Geometry();
-	            
-	            // for(var x = -w; x <= w; x+= 2*w)
-	            // 	for(var x = -w; x <= w; x+= 2*w)
-	            
-	            // for(var i = 0; i < geometry.vertices.length; i++){
-	            // 	var v = geometry.vertices[i];
-	            // 	if(Math.abs(v.x) == w/2 || Math.abs(v.y) == h/2)
-	            // 		geometry.vertices.push(v.clone());
-	            // 	else
-	            // 		console.log(v);
-	            // }
-	    //         for(var i = 0; i < geometry.vertices.length; i++){
-					// var v = geometry.vertices[i];
-
-		   //        	if(Math.abs(v.x) != w/2 && Math.abs(v.y) != h/2){
-		   //        		geometry.vertices.splice(i,1);
-		   //        		i-=1;
-		   //        	}
-
-	    //         }
-
-	            // console.log(geometry.vertices.length)
-				material = new THREE.MeshBasicMaterial( {color: 0x03A678} );//todo - add color to dat-gui
-				cube = new THREE.Mesh( geometry, material );
-				cube.position.x += params.offsetX;
-				cube.position.y += params.offsetY;
-				cube.position.z += params.offsetZ;
-				// cube.geometry.dynamic = true
-				// cube.geometry.verticesNeedUpdate = true
-				scene.add( cube );
-			}
-			
-			function addArrows(){
-				spriteGroup.children = [];
-				var size = params.fsize;
-				var freq = params.ffreq;
-				for(var x = -size; x <= size; x+=size/freq)
-	            		for(var y = -size; y <= size; y+=size/freq)
-	            		for(var z = -size; z <= size; z+=size/freq){
-	            			var start = new THREE.Vector3(x,y,z);
-		            		
-		            		var xc = eval(vectorFormula[0]);
-		            		var yc = eval(vectorFormula[1]);
-		            		var zc = eval(vectorFormula[2]);
-
-		            		var arrow = ah(start, new THREE.Vector3(xc,yc,zc));
-		            		// console.log(arrow);
-		            		// console.log(arrow);
-		            		spriteGroup.add(arrow);
-	            		}
-			}
-			
-			function updateArrows(){
-				for(var i = 0; i < spriteGroup.children.length; i++){
-					var arrow = spriteGroup.children[i];
-					var pos = arrow.position;
-					arrow.setDirection(computePoints(pos.x,pos.y,pos.z).normalize());
-				}
+			function renderLines(){//todo - create lines that show the electric field with euler approximations
+				return 0;
 			}
 
 			function animate(){
@@ -276,83 +205,31 @@
 			function render(){
 				camera.lookAt(scene.position);
 				
-				
-				if(!pause){
-					updateGeometryVertices();
-					t+=0.01;
-					updateArrows();
+				if(pause){
+					controls.update();
+					renderer.render(scene, camera);
+					return;
 				}
-					
 
-				//stuff you want to happen continuously here
+
+				
+				t+=0.01;
+				
+				var electricForce = netChargeVector(testCharge);//the direction in which the testCharge will move
+
+				testChargeArrow.position = testCharge.position.add(electricForce);//might need to divide by a scalar so it doesn't move too quickly
+				var arrowDirection = electricForce.clone();
+				var newMagnitude = Math.max(Math.min(Math.log(arrowDirection.length()), 4), 1);//set the magnitude to the log of its original - ensure it's within the range [1,4]
+
+				testChargeArrow.setDirection(arrowDirection.normalize().multiplyScalar(newMagnitude));
+
+
+
+				
 				controls.update();
 				renderer.render(scene, camera);
 				
 			}
-			
-			function updateGeometryVertices(){
-				for(var vindex in cube.geometry.vertices){
-					var vertex = cube.geometry.vertices[vindex];
-					var offset = scene.localToWorld(vertex.clone()).add(cube.position);//this gets the vertex's position relative to the scene's origin, which is what we want
-					var movementVector = computePoints(offset.x, offset.y, offset.z);
-					movementVector.divideScalar(params.speed);//we don't want it moving too quickly
-					vertex.add(movementVector);//moving the actual thing
-				}
-				cube.geometry.verticesNeedUpdate = true
-				// scene.remove(cube);
-				// cube = new THREE.Mesh( geometry, material );
-				// scene.add( cube );
-				// cube.setGeometry(geometry)
-
-			}
-			
-			// function boxGeo(height, width, hsections, wsections){//a box with only points on the border, with no points on the inside. Will save a shitton of computing time
-			// 	var geo = new THREE.Geometry();
-			// 	for(var x = -width; x <= width; x+= width / wsections)
-			// 		for(var y = -height; y <= height; y+= height / hsections)
-			// 			if(Math.abs(y) == height || Math.abs(x) == width)//if we're on a border position
-			// 				geo.vertices.push(new THREE.Vector3(x,y,0));
-			// 	return geo;
-				
-			// }
-			
-			
-			function boxGeo(width,height, hsections, wsections){//asdfiuahsdifuhasdfiu
-
-					var a = {
-						x:-width/2,
-						y:-height/2
-					}
-					
-					var b = {
-						x:width/2,
-						y:height/2
-					}
-					
-					
-					var geometry = new THREE.Geometry();
-					
-					geometry.vertices.push( new THREE.Vector3( a.x, a.y, 0));
-					geometry.vertices.push( new THREE.Vector3( b.x, a.y, 0));
-					geometry.vertices.push( new THREE.Vector3( b.x, b.y, 0));
-					geometry.vertices.push( new THREE.Vector3( a.x, b.y, 0));
-
-					geometry.faces.push( new THREE.Face3( 0, 1, 2 )); // counter-clockwise winding order
-					geometry.faces.push( new THREE.Face3( 0, 2, 3 ));
-					
-					
-					for(var x = -width; x <= width; x+= width / wsections)//now we'll add the little segments
-						for(var y = -height; y <= height; y+= height / hsections)
-							if((Math.abs(y) == height || Math.abs(x) == width) && geometry.vertices.indexOf(new THREE.Vector3(x,y,0)) == -1)//if we're on a border position
-								geometry.vertices.push(new THREE.Vector3(x,y,0));
-					
-					// geometry.computeCentroids();
-					geometry.computeFaceNormals();
-					geometry.computeVertexNormals();
-
-					return geometry
-			}
-			
 		</script>
 
     <!-- A bunch of demos I made for you all - we call it after because everything needs to have isntantiated first-->
